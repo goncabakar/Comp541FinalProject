@@ -16,7 +16,7 @@ function main()
   opts_disc = map(x->Adam(lr=0.0002, beta1=0.5), w_disc)
   opts_gen = map(x->Adam(lr=0.0002, beta1=0.5), w_gen)
 
-  noise = rand(Float32,100,batchsize)
+  noise = rand(Float32,10,batchsize)
   fake_image = generator(w_gen, noise)
   loss_gen = loss_generator(w_gen, w_disc, noise)
   loss_disc = loss_discriminator(w_disc, xtrn_mb[1], fake_image)
@@ -74,6 +74,7 @@ function generator(w, noise)
   bs = size(noise,2);
   x = w[1]*noise .+ w[2];
   x = reshape(x, 4, 4, 256, bs);
+  x = relu(x);
   x = batchnorm(deconv4(w[3],x;padding=2, stride=2) .+ w[4]);
   x = relu(x);
   x = batchnorm(deconv4(w[5],x;padding=2, stride=2) .+ w[6]);
@@ -124,7 +125,7 @@ function weights_generator()
   #initalize weights for generator
   winit = 0.02
   w = Array(Any,8)
-  w[1] = winit*randn(Float32, 4*4*256,100)
+  w[1] = winit*randn(Float32, 4*4*256,10)
   w[2] = zeros(Float32, 4*4*256,1)
   w[3] = winit*randn(Float32, 5,5,128,256)
   w[4] = zeros(Float32, 1,1,128,1)
@@ -175,7 +176,7 @@ function accuracy(w_gen, w_disc, xtst)
     writedlm("test2.yuv", image[:,:,1,1].*255)
     ncorrect1 = ncorrect1 + sum(ypred[1:1,:] .> 0.5)
     ninstance = size(ypred,2)
-    noise = rand(Float32,100,128)
+    noise = rand(Float32,10,128)
     fake_image = generator(w_gen, noise)
     open("test.yuv", "w")
     writedlm("test.yuv", fake_image[:,:,1,1].*255)
@@ -202,7 +203,7 @@ function train(w_gen, w_disc, xtrn, epoch, xtst, opts_disc, opts_gen)
   loss_gen = Any[]
   loss_disc = Any[]
   fake_image = Any[]
-  noise = rand(Float32,100,128)
+  noise = rand(Float32,10,128)
 
   #train_bs = 10
   train_bs = round(Int,60000/128)-1
