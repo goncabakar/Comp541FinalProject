@@ -114,7 +114,6 @@
     x = leaky_relu(x)
 
     x = batchnorm(conv4(w[7],x;padding=2, stride=2) .+ w[8])
-    x = leaky_relu(x)
 
     x = mat(x)
     x = w[9]*x .+ w[10]
