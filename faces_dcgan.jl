@@ -10,11 +10,11 @@ function main()
 
   xtst = Any[]
   xtst0 = Any[]
-  xtst0 = loaddata("faces", batchsize, 1201)
+  xtst0 = loaddata("faces", batchsize, 30)
   push!(xtst, xtst0)
-  xtst0= loaddata("faces", batchsize, 1202)
+  xtst0= loaddata("faces", batchsize, 31)
   push!(xtst, xtst0)
-  xtst0 = loaddata("faces", batchsize, 1203)
+  xtst0 = loaddata("faces", batchsize, 32)
   push!(xtst, xtst0)
 
   w_gen = weights_generator()
@@ -24,7 +24,7 @@ function main()
 
   noise = 2*(rand(Float32,100,128).-0.5)
   #noise = randn(Float32,100,batchsize)
-  #noise = convert(KnetArray{Float32}, noise)
+  noise = convert(KnetArray{Float32}, noise)
 
   fake_image = generator(w_gen, noise,mode=0)
   loss_gen = loss_generator(w_gen, w_disc, noise)
@@ -33,7 +33,7 @@ function main()
   report(0,loss_gen,loss_disc,accuracy(w_gen, w_disc, xtst,0))
 
   @time for epoch=1:10
-    max = 1200
+    max = 29
     for i=1:max
       xtrn = loaddata("faces", batchsize, i)
       train(w_gen, w_disc, xtrn, epoch, xtst, opts_disc, opts_gen, i, max)
@@ -46,7 +46,7 @@ report(epoch, lossgen, lossdisc, accuracy)=println((:epoch,epoch,:generatorloss,
 
 function loaddata(dataset, bs, n)
   if dataset == "faces"
-    path = "/Users/goncabakar/Desktop/hop/4/machine_learning/facesdataset/img_align_celeba_png/"
+    path = "/home/ec2-user/mini/"
     e2 = zeros(Float32,(128, 128, 3, bs))
     index = 1
     for i=(n-1)*bs+1:n*bs
@@ -64,6 +64,7 @@ function loaddata(dataset, bs, n)
       else sizeof(str) == 6
         str = path * str * ".png"
       end
+      #println("string is: ", str)
       a0 = load(str)
       a1 = channelview(a0)
       b1 = convert(Array{Float32}, a1)
@@ -73,8 +74,10 @@ function loaddata(dataset, bs, n)
       index = index + 1
     end
     e3 = pool(e2; stride=2, window=2, padding=0, mode=1);
-    e4 = 2*(e3.-0.5)
-    #return map(a->convert(KnetArray{Float32},a), e2)
+    e4 = pool(e3; stride=2, window=2, padding=0, mode=1);
+    e4 = 2*(e4.-0.5)
+    e4 = convert(KnetArray{Float32},e4)
+    #return map(a->convert(KnetArray{Float32},a), e4)
     return e4
   end
 end
@@ -85,7 +88,7 @@ function generator(w, noise; mode=0)
   #use deconv4 for deconvolution operator
   bs = size(noise,2);
   x = w[1]*noise .+ w[2];
-  x = reshape(x, 4, 4, 1024, bs);
+  x = reshape(x, 2, 2, 1024, bs);
   x = batchnorm(x);
   x = relu(x);
   x = batchnorm(deconv4(w[3],x;padding=2, stride=2) .+ w[4]);
@@ -138,18 +141,18 @@ function weights_discriminator()
   w[6] = zeros(Float32, 1,1,512,1)
   w[7] = winit*randn(Float32, 6,6,512,1024)
   w[8] = zeros(Float32, 1,1,1024,1)
-  w[9] = winit*randn(Float32, 1, 4*4*1024)
+  w[9] = winit*randn(Float32, 1, 2*2*1024)
   w[10] = zeros(Float32,1,1)
-  #return map(a->convert(KnetArray{Float32},a), w)
-  return w
+  return map(a->convert(KnetArray{Float32},a), w)
+  #return w
 end
 
 function weights_generator()
   #initalize weights for generator
   winit = 0.02
   w = Array(Any,10)
-  w[1] = winit*randn(Float32, 4*4*1024,100)
-  w[2] = zeros(Float32, 4*4*1024,1)
+  w[1] = winit*randn(Float32, 2*2*1024,100)
+  w[2] = zeros(Float32, 2*2*1024,1)
   w[3] = winit*randn(Float32, 6,6,512,1024)
   w[4] = zeros(Float32, 1,1,512,1)
   w[5] = winit*randn(Float32, 6,6,256,512)
@@ -158,8 +161,8 @@ function weights_generator()
   w[8] = zeros(Float32, 1,1,128,1)
   w[9] = winit*randn(Float32, 6,6,3,128)
   w[10] = zeros(Float32, 1,1,3,1)
-  #return map(a->convert(KnetArray{Float32},a), w)
-  return w
+  return map(a->convert(KnetArray{Float32},a), w)
+  #return w
 end
 
 function loss_discriminator(w_disc, real_image, fake_image)
@@ -206,15 +209,33 @@ function accuracy(w_gen, w_disc, xtst, epoch)
 
     noise = 2*(rand(Float32,100,128).-0.5)
     #noise = randn(Float32,100,128)
+    noise = convert(KnetArray{Float32}, noise)
 
     fake_image2 = generator(w_gen, noise;mode=1)
     fake_image = generator(w_gen, noise;mode=0)
 
 
     filename = "test_faces_epoch$(epoch)_$(i).png"
-    fake_image2 = reshape(fake_image2[:,:,:,1], 64, 64, 3)
+    fake_image2 = convert(Array{Float32}, fake_image2)
+    fake_image2 = reshape(fake_image2[:,:,:,1], 32, 32, 3)
     fake_image2 = colorview(RGB, permutedims(fake_image2,[3 2 1]))
     save(filename, (fake_image2))
+
+    for w in 1:length(w_gen)
+      w_gen[w] = convert(Array{Float32}, w_gen[w])
+      writedlm(filename*"_weight$w.txt", w_gen[w])
+      w_gen[w] = convert(KnetArray{Float32}, w_gen[w])
+    end
+
+    for w in 1:length(w_disc)
+      w_disc[w] = convert(Array{Float32}, w_disc[w])
+      writedlm(filename*"_weightdisc$w.txt", w_disc[w])
+      w_disc[w] = convert(KnetArray{Float32}, w_disc[w])
+    end
+
+    noise = convert(Array{Float32}, noise)
+    writedlm(filename*"_noise.txt", noise)
+    noise = convert(KnetArray{Float32}, noise)
 
     ypred2 = discriminator(w_disc,fake_image)
     expected_sum2 += sum(ypred2)
@@ -229,7 +250,7 @@ function batchnorm(x;epsilon=1e-5)
           d = ndims(x) == 4 ? (1,2,4) : (2,)
           s = prod(size(x)[[d...]])
           mu = sum(x,d) / s
-          sigma = sqrt(epsilon + (sum((x.-mu).^2, d)) / s)
+          sigma = sqrt(epsilon + (sum((x.-mu).*(x.-mu), d)) / s)
 
     xhat = (x.-mu) ./ sigma
     return xhat
@@ -241,10 +262,12 @@ function train(w_gen, w_disc, xtrn, epoch, xtst, opts_disc, opts_gen, j, max)
   fake_image = Any[]
 
   noise = 2*(rand(Float32,100,128).-0.5)
+  noise = convert(KnetArray{Float32}, noise)
   #noise = randn(Float32,100,128)
   fake_image = generator(w_gen, noise; mode=0)
 
   gradient_disc = grad_disc(w_disc, xtrn, fake_image)
+
 
   for i in 1:length(w_disc)
     update!(w_disc[i], gradient_disc[i], opts_disc[i])
